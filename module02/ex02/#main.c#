@@ -1,0 +1,158 @@
+/* ************************************************************************** */
+/*                                                                            */
+/*                                                        :::      ::::::::   */
+/*   main.c                                             :+:      :+:    :+:   */
+/*                                                    +:+ +:+         +:+     */
+/*   By: mgrossi <mgrossi@student.42.fr>            +#+  +:+       +#+        */
+/*                                                +#+#+#+#+#+   +#+           */
+/*   Created: 2026/04/13 11:07:02 by mgrossi           #+#    #+#             */
+/*   Updated: 2026/04/21 18:13:06 by mgrossi          ###   ########.fr       */
+/*                                                                            */
+/* ************************************************************************** */
+
+#include <avr/io.h>
+#include <util/delay.h>
+#include <avr/interrupt.h>
+
+/*
+https://ww1.microchip.com/downloads/en/DeviceDoc/ATmega48A-PA-88A-PA-168A-PA-328-P-DS-DS40002061A.pdf
+ 184 : USART Initialization
+ 202 : UMSELn Bits Settings
+*/
+void uart_init()
+{
+	/*
+		ubrr = (F_CPU / prescale / UART_BAUDRATE) - 1 <- (en theorie)	
+	*/
+	uint16_t ubrr = (F_CPU / 16 / 115200);
+
+	/*
+	baud rate (vitesse de communication): 
+		p204 : 20.11.5 UBRRnL and UBRRnH – USART Baud Rate Registers 
+		UBRR0H : USART Baud Rate Register 0 High
+		UBRR0L : USART Baud Rate Register 0 Low
+			permet de faire rentrer le ubrr qui est dans 16 bit dans deux 8 bits
+	*/
+	UBRR0H = (ubrr << 8);
+	UBRR0L =  ubrr;
+
+	/*
+	
+		UCSR0B : UCSRnB – USART Control and Status Register n B / 
+		TXEN0 : Transmitter Enable n / Active la transmition
+		RXEN0 : Receiver Enable n / Acvtive la reception
+		
+	*/
+	UCSR0B = (1 << TXEN0) | (1 << RXEN0);
+
+	/*	
+		p 203	
+		active le syteme 8N1 (0 00000000 1)
+	*/
+	UCSR0C = (1 << UCSZ01) | (1 << UCSZ00);
+}
+
+
+
+// void timer1_init()
+// {
+// 	// en liens avec le CTC(WGM12)
+// 	OCR1A = 31249;
+// 	// Toggle for 0.5s, LED blink 1Hz
+//     // (16MHz (16 000)/ 256 * 0.5) - 1 // Fréquence d'horloge du microcontrôleur / Prescaler * Période souhaitée 0.5s - on commence a 0 pas a 1
+// 	// 31249 est le nombre de cycles d'horloge du timer.
+
+// 	/*
+// 		TCCR1A : Timer/Counter1 Control Register 1A (gere le comportement des sorties)
+// 		COM1A0 : Compare Output Mode (CPM) / 1 fait référence au Timer1 / A fait référence au canal A du Timer1 / 0 signifie que c'est le bit 0
+// 		avec cette comfiguration il est en mode Toggle (), fait bascler le 0 a 1. 
+// 	*/
+// 	TIMSK1 = (1 << OCIE1A); // p145 : Timer/Counter1 Interrupt Mask Register
+	
+// 	// Mode CTC + Prescaler 1024
+// 	TCCR1B = (1 << WGM12) | (1 << CS12) | (1 << CS10); // Prescale 1024
+// }
+
+
+//Permet d envoyer une char 
+void uart_init()
+{
+	/*
+		ubrr = (F_CPU / prescale / UART_BAUDRATE) - 1 <- (en theorie)	
+	*/
+	uint16_t ubrr = (F_CPU / 16 / 115200);
+
+	/*
+	baud rate (vitesse de communication): 
+		p204 : 20.11.5 UBRRnL and UBRRnH – USART Baud Rate Registers 
+		UBRR0H : USART Baud Rate Register 0 High
+		UBRR0L : USART Baud Rate Register 0 Low
+			permet de faire rentrer le ubrr qui est dans 16 bit dans deux 8 bits
+	*/
+	UBRR0H = (ubrr << 8);
+	UBRR0L =  ubrr;
+
+	/*
+	
+		UCSR0B : UCSRnB – USART Control and Status Register n B / 
+		TXEN0 : Transmitter Enable n / Active la transmition
+		RXEN0 : Receiver Enable n / Acvtive la reception
+		
+	*/
+	UCSR0B = (1 << TXEN0) | (1 << RXEN0);
+
+	/*	
+		p 203	
+		active le syteme 8N1 (0 00000000 1)
+	*/
+	UCSR0C = (1 << UCSZ01) | (1 << UCSZ00);
+}void uart_tx(char c)
+{
+	// Attend que le buffer de transmission (UDR0) soit vide 
+    // On boucle tant que le bit UDRE0 est à 0
+    while (!(UCSR0A & (1 << UDRE0)))
+		;
+    // Place le caractère dans le registre UDR0 pour l'envoyer
+	UDR0 = c;
+}
+
+
+// Permet de recevoir un char
+char uart_rx(void)
+{
+	while (!(UCSR0A & (1 << RXC0)))
+		;
+	return (UDR0);
+}
+
+
+void uart_print_str(const char* str)
+{
+	while(*str)
+	{
+		uart_tx(*str);
+		str++;
+	}	
+}
+
+
+// __attribute__((signal, used)) //C est une microdonnee, pour le compilateur
+// void	TIMER1_COMPA_vect(void) // quand le timer match, il lance ceci 
+// {
+// 	uart_print_str("Hello World!\r\n");
+// }
+
+int	main(void)
+{
+	uart_init();
+	//timer1_init();
+	
+	unsigned char c;
+
+	//SREG |= (1<<7); // permet d activer Enable global interrupts p77 : 12.1 Interrupt Vectors in ATmega48A and ATmega48PA
+	while (1)
+	{
+		c = uart_rx(); // recevoir
+		uart_tx(c); // envoyer
+	}
+}
